@@ -509,3 +509,96 @@ ngOnDestroy {
   }
 }
 ```
+
+## rxjs 的调试
+
+在使用 rxjs 的时候，传统的 debug 手段往往显得“心有余而力不足”，因为传统的 debug 工具都是基于命令式的编程模型。但对于 rxjs 这种响应式的编程范式来说，设置断点跟踪虽然也可以，但由于 rxjs 天生是一个异步的模型，这就使得断点跟踪这种同步的 debug 手段不是很顺手，而且有些问题是在这种跟踪模型下根本暴露不出来。
+
+于是，log 大法就出现了，rxjs 提供的 `tap` 操作符非常适合做 log 输出，因为它并不改变流。就像上面写到的那样，我们可以在 `tap` 中将希望的内容 log 出来。但这种 log 方式有个问题就是，在开发时可以这样做，如果发布后，我们得去掉这些 log。当然我们也可以自己用环境变量去判断，而不用删掉这些代码。但如果有一个统一的机制能够方便的处理就更好了。
+
+那么有没有更好的 debug 手段呢？当然有的，我们体会到的痛点，社区早就有人体会到了，那么这里我介绍一个开源的 rxjs 日志和调试类库 `rxjs-spy` <https://cartant.github.io/rxjs-spy/>
+
+### 安装和初始化
+
+在 Angular 中使用 `rxjs-spy` 是很简单的，首先需要安装依赖
+
+```bash
+yarn add rxjs-spy --dev
+```
+
+然后在 `src/main.ts` 中导入并初始化 `rxjs-spy` 。
+
+```ts
+import { enableProdMode } from '@angular/core';
+import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
+import { create } from 'rxjs-spy';
+
+import { AppModule } from './app/app.module';
+import { environment } from './environments/environment';
+
+const spy = create();
+
+if (environment.production) {
+  enableProdMode();
+}
+
+platformBrowserDynamic()
+  .bootstrapModule(AppModule)
+  .catch(err => console.log(err));
+
+```
+
+### 给 rxjs 流做标签
+
+比如下面的登录鉴权逻辑中，我们就可以在取得 `token` 后利用 `rxjs-spy` 的 `tag` 方法将其标记为 `[AuthService][login][id_token]` ，我这里采用的是以 `[类名][方法名][流产生的值名称]` 的形式做标签，实际工作中你可以根据自己的规则命名，但最好团队采用统一命名方式。
+
+```ts
+// 省略其他 imports
+import { Observable } from 'rxjs';
+import { pluck, map } from 'rxjs/operators';
+import { tag } from 'rxjs-spy/operators';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class AuthService {
+  // 省略其他方法
+  login(auth: Auth): Observable<string> {
+    return this.http
+      .post<{ id_token: string }>(`${environment.apiBaseUrl}auth/login`, JSON.stringify(auth), { headers: this.headers })
+      .pipe(
+        map((res) => <string>res.id_token),
+        tag('[AuthService][login][id_token]')
+      );
+  }
+}
+
+```
+
+打完这个标记之后，我们也用不着在生产环境删除，可以一直保留，因为我们查看 log 的方式是在 Chrome 的 console 中去调用 `rxSpy.show()` ，如下图所示，在 console 中敲入 `rxSpy.show()` 就会输出对应的 log。如果只想看某个 tag 的 log 可以传入该 tag 值 `rxSpy.show('[AuthService][login][id_token]')`
+
+![在浏览器 Console 中操作 rxjs-spy](/assets/2018-07-09-13-55-00.png)
+
+除了 `show` 之外，`rxspy-log` 还提供了一系列的可以用于 console 中的方法，比如 `stats()` 是得到调用次数的统计。
+
+![stats 统计方法](/assets/2018-07-09-14-03-03.png)
+
+还有好用的 `debug` 、 `step` 和 `undo` 等用于 debug 调试的方法。如果我们在浏览器打开 <https://cartant.github.io/rxjs-spy/> 然后开启开发者工具的 console ，就可以体验一下这几个方法，比如首先我们在 console 中敲入 `rxSpy.log("interval");` 我们可以看到这个 interval 的流的值被不断的日志输出
+
+![开始 log 流的值](/assets/2018-07-09-15-05-20.png)
+
+而此时，如果我们输入 `rxSpy.pause("interval");` 该流会暂停，可以看到 pause 会返回一个 Deck 实例，这个 Deck 是干嘛用的呢？它是用来控制在暂停后实现类似 debug 的 `step` ，`skip` 等操作的。一般是每个流暂停后都会产生一个 Deck
+
+![pause 方法可以暂停一个流](/assets/2018-07-09-15-07-45.png)
+
+所以还有一个 deck 方法列出目前暂停的流所产生的 Deck
+
+![列出所有 Deck](/assets/2018-07-09-15-15-40.png)
+
+那么我们将第一个赋值给一个变量`var deck = rxSpy.deck(1);` 然后就可以通过这个 `deck` 操作流，实现 debug 的 `step` 或 `skip` 了。
+
+![利用 deck 实现 step](/assets/2018-07-09-15-18-55.png)
+
+类似的，如果敲入 `deck.resume();` 那么流就从暂停状态恢复到正常状态了。
+
+这样调试一个流是不是很爽，如果你觉得好用，就把它推广应用到项目中吧。
