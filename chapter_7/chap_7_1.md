@@ -180,7 +180,7 @@ Optional<User> findOneByMobile(@Param("mobile") String mobile);
 
 ```java
 @Cacheable(cacheNames="files", key="#id")
-public String findFile(String id, boolean includeArchived)
+public String findFile(String id, boolean argNotAffectingResult)
 ```
 
 当然这个 `key` 可以使用 SpEL 表达式，比如 `key="T(someparam).hash(#someparam)` 等，也可以指定自定义 `key` 生成器，比如 `@Cacheable(cacheNames="files", keyGenerator="customKeyGenerator")` ，这可以通过实现 `org.springframework.cache.interceptor.KeyGenerator` 接口来自定义。
@@ -216,7 +216,7 @@ rest.AuthResource$ExistCheck dev.local.gtm.api.web.rest.AuthResource.emailExiste
 2018-04-27 19:29:42.002 DEBUG 9561 --- [ XNIO-2 task-19] s.s.w.c.SecurityContextPersistenceFilter : SecurityContextHolder now cleared, as request processing completed
 ```
 
-接下来，我们再次执行同样的请求，还是观察日志输出，这一次我们找不到任何 MongoDB 查询的日志，
+接下来，我们再次执行同样的请求，还是观察日志输出，这一次我们找不到任何 MongoDB 查询的日志，这证明缓存起作用了。
 
 ```log
 2018-04-27 19:42:22.733 DEBUG 9561 --- [ XNIO-2 task-20] d.l.gtm.api.aop.logging.LoggingAspect : Enter: dev.local.gtm.api.web.rest.AuthResource.usernameExisted() with argument[s] = [test123]

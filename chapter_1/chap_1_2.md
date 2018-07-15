@@ -160,6 +160,7 @@ root = true
 end_of_line = lf
 insert_final_newline = true
 charset = utf-8
+max_line_length=140
 
 [*.md]
 max_line_length = off
@@ -173,6 +174,7 @@ trim_trailing_whitespace = true
 [*.yml]
 indent_style = space
 indent_size = 2
+
 ```
 
 上面这个 EditorConfig 就是定义了一个“根”配置，是的，你可以在一个大工程的各个子项目或者子目录使用各自的 EditorConfig 配置，但如果设置 `root = true` 那么就代表这个文件是根配置，应该放在项目的根目录。
