@@ -26,15 +26,178 @@ Redux 要求开发者改变编程的范式
 
 ### Angular 中有哪些现有的状态管理机制？
 
-如前面所说， Redux 是脱胎于 React 社区的，那么问题来了，在 Angular 中是否适用呢？ Angular 中现有的状态管理机制是什么样子呢？从我个人的经验来看， Redux 对于 Angular 生态的地位要低于它在 React 生态中的地位，这是由于 Angular 内建的依赖注入特性其实在很大程度上解决了状态的管理问题。我们可以通过向组件内注入 service 的方式让多个组件共享数据。所以单纯的状态管理并不是在 Angular 中使用 Redux 的根本原因，Redux 之所以非常流行的主要原因之一是它的工具支持简直是太完美了，对于开发者来说，如果你可以看到每时每刻状态的值的变化以及这些变化产生的来源，这大大的提升了开发人员的生产效率，调试问题不要太简单啊。
+如前面所说， Redux 是脱胎于 React 社区的，那么问题来了，在 Angular 中是否适用呢？ Angular 中现有的状态管理机制是什么样子呢？从我个人的经验来看， Redux 对于 Angular 生态的地位要低于它在 React 生态中的地位，这是由于 Angular 内建的依赖注入特性其实在很大程度上解决了状态的管理问题。我们可以通过向组件内注入 service 的方式让多个组件共享数据。所以单纯的状态管理并不是在 Angular 中使用 Redux 的根本原因，Redux 之所以非常流行的主要因素之一是它的工具支持简直是太完美了，对于开发者来说，如果你可以看到每时每刻状态的值的变化以及这些变化产生的来源，这大大的提升了开发人员的生产效率，调试问题不要太简单啊。
 
 ![Redux Dev Tool](/assets/2018-07-15-22-32-43.png)
 
-另一个 Redux 可以大放光彩的地方是
+## Redux 的核心概念
 
-## 如何
+Redux 的核心概念非常简单，只有三个基础元素： `Action` 、 `State` 、 `Reducer` 。
 
-Action/Reducer/
+### Action -- 信号
+
+`Action` 是什么呢？可以理解成一个信号或者事件：这个信号不仅存在于在页面的交互中，同样存在于应用和后台 API 的交互中。比如我们点击一个增加项目的按钮，也就是发射了一个信号。那么我们预期的结果是项目列表页面上会多一个项目，也就是说项目的状态在应用收到这个信号后改变了。
+
+在 Redux 中的 `Action` 是一个非常简单的 POJO ，有两个属性 `type` 和 `payload` 。 `type` 用于区分信号的类型，而 `payload` 是这个信号携带的数据，这个是可选的。用 `TypeScript` 来定义一下的话就是下面的样子：
+
+```ts
+export interface Action {
+    type: string;
+    payload?: any
+}
+```
+
+比如上述的增加项目的信号可以定义成下面的样子， `type: 'Add Project'` 就是我们用于区分 Action 以便后面在 Reducer 中采取不同的处理。也就是说系统的信号很多，那么在处理的时候我总要知道这个信号是是干嘛的，然后根据其携带的数据去处理。这个例子中的 `payload`  是一个项目对象，添加一个项目当然要把这个项目的数据发出来，否则就算我们收到这个信号也没办法处理数据。
+
+```ts
+{
+  type: 'Add Project',
+  payload: {
+    id: '1234',
+    name: '测试项目',
+    owner: 'admin'
+  }
+}
+```
+
+前面我们提过， `Action` 不只存在于页面之上，具体来说，比如我们的增加项目如果需要先访问后台 API ，后台 API 添加之后才在前端应用添加项目并展示。那么这个调用后台 API 的动作也应该是由一个信号触发的。那么这个触发动作可以是刚刚我们定义的那个 `Action` 吗？当然可以，但这样做下去就会发现问题， HTTP 请求并不是永远都能成功的，如果失败了，怎么办呢？其实失败的情况还真的挺多的：比如由于我们传递的参数没有满足服务端要求，比如我们访问的 API 路径错误，比如断网或访问超时了等等。
+
+所以最好的方式是重新规划我们的 `Action` ：当我们点击页面上的按钮时发射一个信号，接收到信号之后我们访问后端 API，如果成功则发射一个添加项目成功的 `Action` ，否则发射一个添加项目失败的 `Action` 。当应用接收到添加项目成功的 `Action` 后改变应用状态，在列表中添加这个新的项目，如果 `Action` 是添加项目失败的类型的，那么应用项目列表的状态不变。值得指出的一点是 `Add Project` 这个信号的发射源是页面，而 `Add Project Success` 和 `Add Project Fail` 的发射源是调用后台 API 的逻辑。
+
+```ts
+// 由于一般后台 API 会为项目生成一个 ID，所以在前端我们并不在 payload 包含 id ，因为此时 id 尚未产生
+{
+  type: 'Add Project',
+  payload: {
+    name: '测试项目',
+    owner: 'admin'
+  }
+}
+// 服务端添加成功后，会返回这个已经在后台数据库保存的项目，这个里面就有 ID 了
+{
+  type: 'Add Project Success',
+  payload: {
+    id: '1234',
+    name: '测试项目',
+    owner: 'admin'
+  }
+}
+// 如果服务端添加失败，返回一个添加项目失败的 Action ，携带错误信息
+{
+  type: 'Add Project Fail',
+  payload: {
+    code: '400',
+    message: '非法请求'
+  }
+}
+```
+
+从上面的的 Action 来看，简单是足够简单了，但是有一个问题就是类型都是字符，这样在大项目中很容易出现拼写错误或者命名重复。在 Angular 中我们利用 TypeScript 的特性可以将其强类型化，就像下面的例子这样，这个后面我们会详细介绍。
+
+```ts
+export enum AuthActionTypes {
+  Login = '[Login Page] Login',
+  LoginSuccess = '[Auth API] Login Success',
+  LoginFailure = '[Auth API] Login Failure'
+}
+
+export class Login implements Action {
+  readonly type = AuthActionTypes.Login;
+
+  constructor(public payload: Auth) {}
+}
+
+export class LoginSuccess implements Action {
+  readonly type = AuthActionTypes.LoginSuccess;
+
+  constructor(public payload: TokenPair) {}
+}
+
+export class LoginFailure implements Action {
+  readonly type = AuthActionTypes.LoginFailure;
+
+  constructor(public payload: AppError) {}
+}
+
+export type AuthActions =
+  | Login
+  | LoginSuccess
+  | LoginFailure
+```
+
+在设计系统的时候，我个人的习惯是先从 Action 开始设计，先把页面上和 API 返回的 Action 都列出来，在 Action 的 type 中一般要标识一下来源，比如是页面产生的还是 API 产生的。先规划 Action 可以让我们对系统交互有一个比较完整的梳理。
+
+### State -- 应用状态
+
+State 这个概念说起来非常简单，你在页面上展现的数据就是 State ，不同条件下按钮的颜色、开启/关闭进行中的动画都是 State 。如果你有后端的开发经验或者移动端的 MVVM 开发经验的话，甚至可以把 State 类比为 View Model 。这个 State 和领域对象是不一样的，领域对象体现的是应用的业务逻辑关系，但 State 一般是要和具体的数据展现逻辑有关系的。一个 State 的定义其实和普通对象也别无二致，就是一个 POJO 。
+
+```ts
+export interface State {
+  pending: boolean;
+  error?: string;
+}
+```
+
+Redux 的开发者曾经把 State 和数据库做过类比，如果整个应用的状态类比成一个数据库的话，应用中的每个界面或者功能模块对应的 State 就是数据库中的表。
+
+但是和数据库中的表不一样的是， State 是可以层层嵌套的，比如下面的定义中可以看到在应用的根 State 中我们有一个叫 `auth` 的子 State ，而这个叫 `auth` 的 State 又包含了三个子 State: token, loginPage 和 registerPage 。
+
+```ts
+import * as fromToken from './token.reducer';
+import * as fromLoginPage from './login-page.reducer';
+import * as fromRegisterPage from './register-page.reducer';
+import * as fromRoot from '../../reducers';
+
+export interface AuthState {
+  token: fromToken.State;
+  loginPage: fromLoginPage.State;
+  registerPage: fromRegisterPage.State;
+}
+
+export interface State extends fromRoot.State {
+  auth: AuthState;
+}
+```
+
+### Reducer -- 纯函数的状态处理
+
+讲完了前两个概念，其实 Reducer 就再简单不过了 -- Reducer 就是接收当前的 State 和 Action 作为参数，返回**新的** State 的一个纯函数。注意这是一个新的 State，不是原来的 State ，在 Redux 中我们永远不会修改 State ，而是返回一个新的 State，这一点非常重要。这个函数一般情况下就是一个 `switch...case` 的结构，针对不同的 Action 返回不同的 State 。
+
+从下面的例子可以看出 Reducer 一般情况下就是根据 Action 类型做 `switch` 然后返回不同的 State 。
+
+```ts
+export function reducer(state = initialState, action: authActions.AuthActions): State {
+  switch (action.type) {
+    case authActions.AuthActionTypes.Register: {
+      return { pending: true, error: undefined };
+    }
+    case authActions.AuthActionTypes.ClearRegisterErrors:
+    case authActions.AuthActionTypes.RegisterSuccess: {
+      return { pending: false, error: undefined };
+    }
+    case authActions.AuthActionTypes.RegisterFailure: {
+      return { pending: false, error: action.payload.title };
+    }
+    default:
+      return state;
+  }
+}
+```
+
+和 State 类似的， Reducer 也是可以分成多级的，从应用的根级到每个界面或功能的级别，同样是采用 key value 字典这样的形式构造，下面的这个例子描述了一个典型的父级 reducer 长成什么样子。
+
+```ts
+export const reducers: ActionReducerMap<AdminState> = {
+  audit: fromAudit.reducer,
+  auditPage: fromAuditPage.reducer,
+  user: fromUser.reducer,
+  authority: fromAuthority.reducer,
+  building: fromBuilding.reducer,
+  product: fromProduct.reducer,
+  room: fromRoom.reducer,
+  workspace: fromWorkspace.reducer
+};
+```
 
 ## 在 Angular 中使用 Redux
 
@@ -81,7 +244,7 @@ ng config cli.defaultCollection @ngrx/schematics
 }
 ```
 
-配置好 `@ngrx/schematics` 之后，我们就可以通过 Angular CLI 进行 Reducer 、 Action 、 Effects 等模版的快速构建。比如利用 `store` 子命令可以为应用添加 store 的支持。
+配置好 `@ngrx/schematics` 之后，我们就可以通过 Angular CLI 进行 Reducer 、 Action 、 Effects 等模版的快速构建。比如利用 `store` 子命令可以为应用添加 store 的支持，其中 `--root` 说明我们要创建应用的根 store 。
 
 ```bash
 ng generate store State --root --module app.module.ts
@@ -144,42 +307,39 @@ export class AppModule {}
 
 ```
 
-###
+### 构建应用的根 reducer
+
+有了这个模版我们构建应用的 reducer 就方便多了，我们在应用根 State 和 Reducer 中添加 router ，这里我们导入了 `@ngrx/router-store` 。这个类库提供了对于系统路由的 Redux 封装支持，使用这个类库的目的是要让 store 变成系统唯一信任的路由变化源。如果不采用这个类库，你会发现路由的变化是无法体现在 store 中的。这个类库的目的不是替换 Angular Router ，而是要监听路由的变化，将其以 Reducer State 的形式存储起来。此外你也可以封装一些路由 Action 来替换系统提供的路由导航方式，这样做的目的也还是为了统一 store 的行为，让 store 成为唯一的信任源。但请注意，传统的 Router Link 和 navigate 一样可以使用， `@ngrx/router-store` 会监听系统路由的变化的。
 
 ```ts
-import { ActionReducerMap, createSelector, createFeatureSelector, ActionReducer, MetaReducer } from '@ngrx/store';
+import { ActionReducerMap, createSelector, ActionReducer, MetaReducer } from '@ngrx/store';
+import { storeFreeze } from 'ngrx-store-freeze';
 
 import { environment } from '../../environments/environment';
 import { RouterStateUrl } from '../utils/router';
+import { logout } from '../utils/auth';
 
 import * as fromRouter from '@ngrx/router-store';
 import * as fromAuth from '../auth/actions/auth.action';
 
 /**
- * storeFreeze prevents state from being mutated. When mutation occurs, an
- * exception will be thrown. This is useful during development mode to
- * ensure that none of the reducers accidentally mutates the state.
- */
-import { storeFreeze } from 'ngrx-store-freeze';
-import { logout } from '../utils/auth';
-
-/**
- * As mentioned, we treat each reducer like a table in a database. This means
- * our top level state interface is just a map of keys to inner state types.
+ * 定义应用的根状态结构
  */
 export interface State {
   router: fromRouter.RouterReducerState<RouterStateUrl>;
 }
 
 /**
- * Our state is composed of a map of action reducer functions.
- * These reducer functions are called with each dispatched action
- * and the current or initial state and return a new immutable state.
+ * 定义应用的根 reducer 结构
  */
 export const reducers: ActionReducerMap<State> = {
   router: fromRouter.routerReducer
 };
 
+/**
+ * 对于退出登录这个特殊的 Action ，我们需要将所有的 state 清空 -- return reducer(undefined, action);
+ * 当然我们还需要清除 local storage 中的信息，这个我们通过一个函数 logout() 来完成。
+ */
 export function storeStateGuard(reducer: ActionReducer<State>): ActionReducer<State> {
   return function(state, action) {
     if (action.type !== fromAuth.AuthActionTypes.Logout) {
@@ -190,7 +350,9 @@ export function storeStateGuard(reducer: ActionReducer<State>): ActionReducer<St
   };
 }
 
-// console.log all actions
+/**
+ * 以日志形式输出状态和动作
+ */
 export function logger(reducer: ActionReducer<State>): ActionReducer<State> {
   return function(state: State, action: any): State {
     console.log('state', state);
@@ -201,12 +363,45 @@ export function logger(reducer: ActionReducer<State>): ActionReducer<State> {
 }
 
 /**
- * By default, @ngrx/store uses combineReducers with the reducer map to compose
- * the root meta-reducer. To add more meta-reducers, provide an array of meta-reducers
- * that will be composed to form the root meta-reducer.
+ * 除了应用本身的 reducer 之外, @ngrx/store 还可以加载一系列的 meta reducer 。
+ * 你可以把它的作用想象成插件，下面的例子中在生产环境提供 storeStateGuard 而在开发
+ * 环境提供 logger ， storeFreeze 和 storeStateGuard
  */
 export const metaReducers: MetaReducer<State>[] = !environment.production
   ? [logger, storeFreeze, storeStateGuard]
   : [storeStateGuard];
 
 ```
+
+除去 router 之外，我们还根据系统环境的不同构建了不同的 meta reducer ？咦？怎么又搞出来一个新名词？这个 meta reducer 是什么？
+
+### Meta Reducer
+
+Meta Reducer 其实本质上就是一个函数，一个高阶函数。那么什么又是高阶函数呢？一个接收**函数**作为参数的函数就是高阶函数。那么 Meta Reducer 就是
+
+>>接收一个 reducer 作为参数，并返回一个新的 reducer 的函数
+
+下面是一个非常简单的输出 state 和 action 的日志 meta reducer ，我们可以看到我们定义了一个函数，这个函数接受 reducer 作为参数，然后进行了日志输出，返回了一个新的 reduer 。
+
+```ts
+export function logger(reducer: ActionReducer<State>): ActionReducer<State> {
+  // 返回一个 reducer 函数
+  return function(state: State, action: Action): State {
+    console.group(action.type);
+    console.log('state', state);
+    console.log('action', action);
+
+    return reducer(state, action);
+  };
+}
+```
+
+ngrx 团队为什么要引入这样一个概念呢？在 React 中使用过 Redux 的同学应该知道 Redux 在 React 生态中有 n 多的中间件（ `middleware` ）。这些中间件的效果就是要提供一些 Redux 本身不提供的特性，比如上面例子中我们就为 Redux 添加了在控制台输出日志的功能。而 ngrx 团队感觉通过高阶函数可以达到中间件的目的，没有必要照搬 React 生态中的中间件概念。
+
+### 构建 Feature
+
+原来 Redux 的一大问题是在大型项目中，由于整个项目使用的是同一个根级 reducer 。虽然可以通过文件切割的形式分成各个功能模块的 reducer 文件，但是根 reducer 中仍然需要维护各个子 reducer ，导致大型项目中，团队频繁更改同一个文件，这造成了项目协作上的痛苦。
+
+另一方面，传统的 Reducer 是一棵全局状态树，大型项目的 Reducer 树会非常庞大，而且这棵树上大部分的状态对于当前页面是没有用的，这不仅造成了资源的浪费和性能的降低，而且复杂度升高，导致维护成本上升。
+
+`@ngrx` 在 4.x 以上版本提供了一个解决方案 -- Feature ，简单来说， Feature 构成了全局 store 的一部分，和 Module 在 Angular 中的地位类似，你也可以把它理解成 Store 的模块。这样的安排在 Angular 中实在太方便了，你可以按照 Angular 模块的划分去进行 Reducer 的设计。
