@@ -405,3 +405,51 @@ ngrx 团队为什么要引入这样一个概念呢？在 React 中使用过 Redu
 另一方面，传统的 Reducer 是一棵全局状态树，大型项目的 Reducer 树会非常庞大，而且这棵树上大部分的状态对于当前页面是没有用的，这不仅造成了资源的浪费和性能的降低，而且复杂度升高，导致维护成本上升。
 
 `@ngrx` 在 4.x 以上版本提供了一个解决方案 -- Feature ，简单来说， Feature 构成了全局 store 的一部分，和 Module 在 Angular 中的地位类似，你也可以把它理解成 Store 的模块。这样的安排在 Angular 中实在太方便了，你可以按照 Angular 模块的划分去进行 Reducer 的设计。
+
+比如说，我们新建一个 `Admin` 模块
+
+```bash
+ng g m Admin --flat false
+#下面的是命令输出
+CREATE src/app/admin/admin.module.spec.ts (267 bytes)
+CREATE src/app/admin/admin.module.ts (189 bytes)
+```
+
+然后通过下面命令，我们建立一个 Admin 的 Feature ，下面的命令会在 `AdminModule` 所在的 `admin` 目录中帮我们构建好完整的 `actions` ， `reducers` 和 `effects` 目录，以及对应的模版文件。这样一个文件结构也是我们推荐的 -- 在模块中建立对应的 Redux 文件。
+
+```bash
+ng g f admin/Admin -m admin/admin.module --group
+#下面的是命令输出
+CREATE src/app/admin/actions/admin.actions.ts (238 bytes)
+CREATE src/app/admin/reducers/admin.reducer.ts (387 bytes)
+CREATE src/app/admin/reducers/admin.reducer.spec.ts (324 bytes)
+CREATE src/app/admin/effects/admin.effects.ts (334 bytes)
+CREATE src/app/admin/effects/admin.effects.spec.ts (583 bytes)
+UPDATE src/app/admin/admin.module.ts (492 bytes)
+```
+
+此外这个命令还会更新 `admin.module.ts` ，我们可以看到，和根模块中 store 的导入方式不同，在这个模块中我们使用 `StoreModule.forFeature` 和 `EffectsModule.forFeature` 来导入 `reducer` 和 `effects`。
+
+```ts
+import { NgModule } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { StoreModule } from '@ngrx/store';
+import { EffectsModule } from '@ngrx/effects';
+
+import { AdminEffects } from './effects/admin.effects';
+
+import * as fromAdmin from './reducers/admin.reducer';
+
+@NgModule({
+  imports: [
+    CommonModule,
+    StoreModule.forFeature('admin', fromAdmin.reducer),
+    EffectsModule.forFeature([AdminEffects])
+  ],
+  declarations: []
+})
+export class AdminModule { }
+
+```
+
+有了这样的工具，我们构建 Redux 的时候就会少了很多麻烦的文件结构的维护工作，而专注于业务逻辑本身。
