@@ -203,7 +203,7 @@ export const reducers: ActionReducerMap<AdminState> = {
 
 Angular 团队中的一些成员开发了一个开源项目 `ngrx` <https://github.com/ngrx/platform> ，这个项目差不多算作半个官方性质的 Angular 版的 Redux 吧。对应的子项目有以下几个
 
-* `@ngrx/store` - 使用 `RxJS` 实现的 Redux 状态管理框架
+* `@ngrx/store` - 使用 `rxjs` 实现的 Redux 状态管理框架
 * `@ngrx/effects` - 对于 action 产生的副作用管理（副作用我们在后面章节有介绍）
 * `@ngrx/router-store` - 将 Angular 路由连接到 store，让你可以像管理其他状态一样管理路由
 * `@ngrx/store-devtools` - 让 ngrx 应用也能使用强大的 Redux Dev Tool （你一定会喜欢时光机器这么强大的特性）
@@ -373,6 +373,8 @@ export const metaReducers: MetaReducer<State>[] = !environment.production
 
 ```
 
+上面的写法中可能有的同学注意到 `import * as xxx from yyy` 这种写法，这种写法对于我们要从某一个文件中导入多个类或者函数的时候非常有用， `as` 后面跟的是一个别名，使用这个别名就可以引用这个文件中的元素了。
+
 除去 router 之外，我们还根据系统环境的不同构建了不同的 meta reducer ？咦？怎么又搞出来一个新名词？这个 meta reducer 是什么？
 
 ### Meta Reducer
@@ -453,3 +455,113 @@ export class AdminModule { }
 ```
 
 有了这样的工具，我们构建 Redux 的时候就会少了很多麻烦的文件结构的维护工作，而专注于业务逻辑本身。
+
+## Selector -- 状态选择器
+
+其实有了 Reducer 之后，我们就可以很方便的调出状态，只需要在组件内声明一个成员变量，在 `store` 里面选择 `auth` 状态即可。
+
+```ts
+import * as fromAuth from '../../reducers';
+@Component({
+  selector: 'app-register',
+  templateUrl: './register.component.html',
+  styleUrls: ['./register.component.scss']
+})
+export class RegisterComponent implements OnInit {
+  auth$: Observable<Auth>;
+  constructor(private store: Store<fromAuth.State>) {
+    this.auth$ =  this.store.select('auth');
+  }
+}
+```
+
+但实际开发中我们在不同组件中需要的可能会有很多变化，比如有的时候我们只需要 `State` 中的某个属性，有的时候我们还需要计算一下某些属性。这些当然可以放在组件中处理，因为 `Store` 其实是一个 `Observable` ，而 `rxjs` 有很多好用的操作符可以处理这些数据。
+
+这些操作如果放在组件中处理，有几个明显的缺点：
+
+* 如果这些操作是在不同组件中都用到的，这种做法就缺乏可复用性
+* `rxjs` 的操作符对于很多同学来说想掌握的熟练还是有一定门槛的
+* 使用 `store` 得到状态，却使用 `rxjs` 处理数据，用两种技术处理状态不利于形成规范统一的代码
+
+所以更好的处理方式是 Reducer 的归 Reducer 处理，那么 `@ngrx/store` 就给出了选择器这个方案。
+
+什么是选择器呢？选择器就是一个函数，接受状态作为参数，对状态进行处理，返回需要的对象，比如下面的这两个就是最简单的选择器，它们选择了 `Task` 状态的两个属性。
+
+```ts
+export interface State {
+  ids: string[];
+  entities: {[id: string]: Task};
+  selectedProjectId?: string;
+}
+// 省略 Reducer 部分
+export const getSelectedProjectId = (state: State) => state.selectedProjectId;
+export const getTasks = (state: State) => state.ids.map(id => entities[id]);
+```
+
+上面的选择器虽然很简单，但已经体现了一些 Reducer 设计上的技巧。首先是在 State 的设计上，一般来说，如果一个界面上要展现一组数据，比如多个任务的列表，那么很直觉的一个 State 设计应该是下面这个样子：
+
+```ts
+export interface State {
+  tasks: Task[];
+  selectedProjectId?: string;
+}
+```
+
+那么为什么我们不采用这样的设计呢？这是因为数组这种数据结构的优点是插入快，如果在知道数组下标的时候查找也很快。但是实际开发中，大部分情况下我们是通过 `id` 去查找，而不是数组下标，这种情况通过数组查找就比较麻烦了。这种情况下字典的优势就显现出来了，字典可以快速的由键值定位元素。可不可以结合这两种数据结构呢？我们的 State 设计正是这样的结合形式：将所有元素的 id 形成一个数组（ `ids` ）、以字典形式存储列表数据 ( `entities` ) ，这样一个结构我们就既可以利用数组的优势也可以利用字典的优势了。
+
+```ts
+export interface State {
+  ids: string[];
+  entities: {[id: string]: Task};
+  selectedProjectId?: string;
+}
+```
+
+比如我们如果要取得所有的任务，那么 `ids.map(id => entities[id])` 这样就得到了，如果想要取得某一 id 对应的任务就可以 `entities[id]` 就行了。事实上在实际开发中，这种模式太普遍了， `ngrx` 团队还给出了一个效率工具 `@ngrx/entity` 可以让我们不必每次都手动创建这样的结构，并提供很多可以简化 State 更新操作的方法。
+
+更复杂一些的状态选择就需要组合这些基本的选择器，`@ngrx/store` 提供了 `createSelector` 函数，这个函数是一个高阶函数，也就是说它接受函数作为参数，返回处理后的状态。比如下面例子中，我们就是把 `selectTasks` 和 `selectProjectId` 两个基础 `selector` 作为参数传入，然后在最后一个参数（也是一个函数）中，对状态进行处理并返回，这个返回的值同时也是 `createSelector` 的返回值。
+
+```ts
+export const selectTasksByProject = createSelector(
+  getTasks,
+  getSelectedProjectId,
+  (tasks, projectId) => {
+    return tasks
+      ? tasks.filter(task => task.project.id === projectId)
+      : [];
+  }
+);
+```
+
+这个 createSelector 可以添加 `2 - 9` 个参数，这些参数需要是 State 或者 Selector，而最后一个参数是也是一个函数，但这个函数是一个投影函数，将前面的状态作为参数传入，返回一个处理后的数据。在组件中就可以像下面这样去调用了。
+
+```ts
+import * as fromAdmin from '../../reducers';
+// 省略组件其他部分
+ngOnInit() {
+  this.tasks$ = this.store.select(fromAdmin.selectTasksByProject);
+}
+```
+
+刚刚这个 Selector 其实要求我们在 Reducer 的 State 中存有 `seletedProjectId` 这个值
+
+还有一个刚接触 Selector 经常问的一个问题是，如何可以让 Selector 可以接收一个外部传入的参数，比如路由的路径参数？这个就要利用一个高阶函数来处理了，像下面的例子中我们使用一个高阶函数接收参数，返回一个 `createSelector` 。
+
+```ts
+export const selectTasksByProject = (projectId: string) =>
+  createSelector(selectTaskss, tasks => tasks.filter(task => task.projectId === projectId));
+```
+
+那么这样一个带参数的函数就相当于一个工厂方法，我们拿到参数后，构造一个 Selector 并返回这个 Selector 。在组件中调用时，可以按下面的方法进行，从路由中获得 `projectId` ，传入我们刚才的工厂方法中 `fromAdmin.selectTasksByProject(projectId)`。
+
+```ts
+import * as fromAdmin from '../../reducers';
+// 省略组件其他部分
+ngOnInit() {
+  this.tasks$ = this.route.paramMap.pipe(
+    filter(params => params.has('projectId')),
+    map(params => params.get('projectId')),
+    switchMap(projectId => this.store.select(fromAdmin.selectTasksByProject(projectId)))
+  );
+}
+```

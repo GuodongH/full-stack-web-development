@@ -9,3 +9,36 @@
 在这个例子中，我们来看一下 `Add Project` 这个 Action ，这个信号其实是要调用后端 API 的，而这个信号并不会和 State 有什么直接的联系，只有在后端添加数据成功后发出 `Add Project Success` 时才会对 State 产生影响。这种不对 State 产生影响的，但是在 State 之外的其他方面产生了影响的现象，我们给它起个名字叫 Effects ，译成中文就是副作用。为什么叫副作用？因为这个副作用的“副”是参照 Redux 来的， Redux 的主要作用是维护管理 State ，那么对于非 State 的其他方面的影响就是副作用了。
 
 除了 Http 请求这种常见的 Effects ，其他较常见的还有比如对于 local storage 的读写，对 indexDB 的操作等等。任何非 State 的操作都可以看作 Effects 。
+
+下面我们来看一个例子来说明 Effects 怎么写
+
+```ts
+import { Injectable } from '@angular/core';
+import { Observable, of } from 'rxjs';
+import { Action, Store } from '@ngrx/store';
+import { Actions, Effect } from '@ngrx/effects';
+import { map, switchMap, catchError } from 'rxjs/operators';
+
+import { ProjectService } from '../services/project.service';
+
+import * as fromAdmin from '../reducers';
+import * as fromProject from '../actions/project.action';
+
+@Injectable()
+export class ProjectEffects {
+  @Effect()
+  loadUsers$: Observable<Action> = this.actions$.ofType<fromProject.Actions>(fromUser.ActionTypes.LoadUsers).pipe(
+    switchMap(_ =>
+      this.service.getAll().pipe(
+        map((projects: Projects) => new fromProject.LoadProjectsSuccess(projects)),
+        catchError(error => of(new fromProject.LoadProjectsFailure(error)))
+      )
+    )
+  );
+
+  constructor(private actions$: Actions, private service: ProjectService, private store: Store<fromProject.State>) {}
+}
+
+```
+
+首先在 Effects 中的构造函数中注入 Actions ，这个 Actions 就是一个 Action 的事件流，是一个 Obseravble 。
