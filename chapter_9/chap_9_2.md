@@ -292,3 +292,95 @@ eureka:
 
 ### 配置 Eureka Client
 
+配置 Eureka Client 的过程更为简单一些，我们拿 `gtm-config` 项目作为示例为其添加 Eureka Client 特性，这样 Config Server 可以注册到服务发现上，在 `build.gradle` 中加上 `org.springframework.cloud:spring-cloud-starter-netflix-eureka-client` 这个依赖
+
+```groovy
+
+apply plugin: 'org.springframework.boot'
+configurations {
+    springLoaded
+    // 如果使用 undertow 或 jetty 需要把默认包含的 tomcat 排除在外
+    compile.exclude module: 'spring-boot-starter-tomcat'
+}
+dependencies {
+    implementation("org.springframework.cloud:spring-cloud-config-server")
+    implementation("org.springframework.cloud:spring-cloud-config-monitor")
+    implementation("org.springframework.cloud:spring-cloud-starter-netflix-eureka-client")
+    implementation("org.springframework.cloud:spring-cloud-starter-stream-rabbit")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("org.springframework.boot:spring-boot-starter-undertow")
+}
+```
+
+然后在 `Application.java` 中加上 `@EnableDiscoveryClient` 这个注解
+
+```java
+package dev.local.gtm.configserver;
+
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+import org.springframework.cloud.config.server.EnableConfigServer;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+@EnableDiscoveryClient
+@EnableConfigServer
+@Configuration
+public class Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+
+```
+
+在 `application.yml` 中添加 `eureka.client.serviceUrl.defaultZone` 指向刚才的 Eureka Server
+
+```yml
+spring:
+  application:
+    name: configserver
+  cloud:
+    config:
+      server:
+        git:
+          uri: https://gitee.com/twigcodes_group/smartoffice-config.git
+          username: 请输入你的用户名
+          password: 请输入你的密码
+server:
+  port: 8888
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+
+---
+
+spring:
+  profiles: prod
+eureka:
+  instance:
+    hostname: discovery
+  client:
+    registerWithEureka: false
+    fetchRegistry: false
+    serviceUrl:
+      defaultZone: http://${eureka.instance.hostname}:8761/eureka/
+
+```
+
+这样配置好之后，可以启动 Config Server 和 Eureka Server ，可以开启两个 terminal ，分别敲入下面两条命令
+
+```bash
+./gradlew :gtm-config:bootRun
+```
+
+```bash
+./gradlew :gtm-discovery:bootRun
+```
+
+然后访问 <http://localhost:8761/> 就可以看到 `CONFIGSERVER` 已经注册到 Eureka 服务上了。
+
+![配置 Config Server 使用发现服务](/assets/2018-08-02-20-26-11.png)
