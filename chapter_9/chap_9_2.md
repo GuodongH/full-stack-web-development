@@ -384,3 +384,5 @@ eureka:
 然后访问 <http://localhost:8761/> 就可以看到 `CONFIGSERVER` 已经注册到 Eureka 服务上了。
 
 ![配置 Config Server 使用发现服务](/assets/2018-08-02-20-26-11.png)
+
+这里值得指出的是， Config Server 和 Eureka Server 是互相依赖的， Eureka Server 的配置需要到 Config Server 中获取，而 Config Server 也想要注册到 Eureka Server 。但这个不会变成死循环，因为如果没有找到配置中心服务器，会使用本地配置文件，而如果找不到服务发现服务器，会在启动后不断以一定间隔去查找。
