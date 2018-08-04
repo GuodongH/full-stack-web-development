@@ -393,6 +393,19 @@ zuul:
 
 `stripPrefix` 这个属性是决定是否去掉前缀，也就是 `/api` ，我们设置的就是去掉 `api` 。举个例子，如果我们对路由网关发送这个请求 <http://localhost:8090/api/actuator/info> ，那么转发到 `api-service` 时，请求就变成了 <http://localhost:8080/actuator/info> ，去掉了 `/api` 这个路径前缀。
 
+有些时候，我们转发请求的时候，并不需要将包含一些敏感信息的 Header 一起转发出去，这种情况下我们可以设置 `zuul.routes.api.sensitiveHeaders` ，这里设置的值就不会转发出去，这个属性的默认值是 `Cookie,Set-Cookie,Authorization` ，也就是默认情况下，这些 Header 不会被转发。但比如我们希望 `Authorization` 被保留的话，就可以设置 `sensitiveHeaders` 为 `Cookie,Set-Cookie`
+
+```yml
+zuul:
+  ignoredServices: '*'
+  routes:
+    api:
+      path: /api/**
+      serviceId: api-service
+      sensitiveHeaders: Cookie,Set-Cookie
+      stripPrefix: true
+```
+
 完整的 `gtm-gateway` 的 `application.yml` 现在看起来就是下面的样子。
 
 ```yml
@@ -432,3 +445,5 @@ eureka:
       defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/
 
 ```
+
+Zuul 还提供很多其他功能，比如负载均衡、 Filter 等，具体的展开就不在这里进行的，有兴趣的同学可以去 <https://cloud.spring.io/spring-cloud-netflix/single/spring-cloud-netflix.html#_router_and_filter_zuul> 学习。
