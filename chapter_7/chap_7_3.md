@@ -365,4 +365,274 @@ public class UserResource {
 }
 ```
 
-启动应用后，我们可以看到
+启动应用后，在 <http://localhost:8091/swagger-ui.html#/> 我们可以看到 `/api/_search/users/{query}` 的接口
+
+![在 Swagger 中尝试 Elasticsearch ](/assets/2018-08-07-11-28-40.png)
+
+我们可以在 `query` 中尝试一下 Elasticsearch 的 `QueryString Query` 的威力，当然要实验之前，请先建立一些必要的数据，新建几个 User ，这个可以通过 Swagger 很快的完成。
+
+假设我们的几个用户数据如下
+
+```json
+[
+    {
+      "id": "5b6919202873f9fe26e24752",
+      "login": "lisi",
+      "mobile": "13000000002",
+      "name": "李四",
+      "email": "lisi@local.dev",
+      "avatar": "avatars:svg-2",
+      "activated": true,
+      "authorities": [
+        "ROLE_USER"
+      ]
+    },
+    {
+      "id": "5b69193c2873f9fe26e24754",
+      "login": "wangwu",
+      "mobile": "13000000003",
+      "name": "王五",
+      "email": "wangwu@local.dev",
+      "avatar": "avatars:svg-1",
+      "activated": true,
+      "authorities": [
+        "ROLE_USER",
+        "ROLE_ADMIN"
+      ]
+    },
+    {
+      "id": "5b6919042873f9fe26e24750",
+      "login": "zhangsan",
+      "mobile": "13000000001",
+      "name": "张三",
+      "email": "zhangsan@local.dev",
+      "avatar": "avatars:svg-3",
+      "activated": true,
+      "authorities": [
+        "ROLE_USER"
+      ]
+    }
+]
+```
+
+如果我们在 `query` 中输入 `zhangsan` 或者 `张三` 或者甚至 `张` 都可以看到如下的输出，我们搜索到了这个姓名为 `张三` 的用户。
+
+```json
+{
+  "content": [
+    {
+      "id": "5b6919042873f9fe26e24750",
+      "login": "zhangsan",
+      "mobile": "13000000001",
+      "name": "张三",
+      "pinyinNameInitials": "zs",
+      "email": "zhangsan@local.dev",
+      "avatar": "avatars:svg-3",
+      "activated": true,
+      "authorities": [
+        "ROLE_USER"
+      ],
+      "createdBy": "admin",
+      "createdDate": "2018-08-07T03:59:00.503Z",
+      "lastModifiedBy": "admin",
+      "lastModifiedDate": "2018-08-07T03:59:00.503Z"
+    }
+  ],
+  "pageable": {
+    "sort": {
+      "sorted": false,
+      "unsorted": true
+    },
+    "offset": 0,
+    "pageSize": 20,
+    "pageNumber": 0,
+    "paged": true,
+    "unpaged": false
+  },
+  "facets": [],
+  "aggregations": null,
+  "scrollId": null,
+  "totalElements": 1,
+  "totalPages": 1,
+  "size": 20,
+  "number": 0,
+  "numberOfElements": 1,
+  "sort": {
+    "sorted": false,
+    "unsorted": true
+  },
+  "first": true,
+  "last": true
+}
+```
+
+但如果我们搜索 `zhang` 或者 `san` 结果却会返回空，这个主要是用户名的 `zhangsan` 是一个词，而姓名的 `张三` 这个中文词其实是两个 `word` ，所以 `张` 可以被匹配而 `zhang` 却没有匹配到。那么如果我们想要匹配 `zhang` 怎么办呢？可以使用通配符 `*` ，我们如果在 `query` 输入框中输入 `zhang*` 就有可以搜索到同样的结果了。
+
+有的同学可能看到这里会觉得有点奇怪，因为我们没有指定那个字段，只是给出了要搜索的值，为什么能搜索到结果呢？一般来说我们在做常规 SQL 查询的时候应该是 `name = "value"` 或者模糊查询像 `name like %value%` ，但我们在上面的例子中完全没有指定一个字段。这是由于 Elasticsearch 是一个全文搜索引擎，也就是说它会对所有字段建立索引，从行为上说，它非常类似于 Google 这种网络搜索引擎。
+
+那么如果我们希望只对某个字段进行搜索可不可以呢？当然没问题，我们如果将搜索条件改成 `name:张` ，那么这个条件就是只应用于 `name` 这个字段了。你可以试试如果条件改成 `name:zhang*` 会返回什么？
+
+另一个问题是如果多个条件怎么办？比如说我们希望找到姓名为 `张三` 或者 `李四` 的用户，那么我们可以试试这样的条件 `张三 OR 李四` ，注意那个 `OR` 需要大写，而且之前和之后都有空格。这样的条件会搜索到下面的结果：
+
+```json
+{
+  "content": [
+    {
+      "id": "5b6919042873f9fe26e24750",
+      "login": "zhangsan",
+      "mobile": "13000000001",
+      "name": "张三",
+      "pinyinNameInitials": "zs",
+      "email": "zhangsan@local.dev",
+      "avatar": "avatars:svg-3",
+      "activated": true,
+      "authorities": [
+        "ROLE_USER"
+      ],
+      "createdBy": "admin",
+      "createdDate": "2018-08-07T03:59:00.503Z",
+      "lastModifiedBy": "admin",
+      "lastModifiedDate": "2018-08-07T03:59:00.503Z"
+    },
+    {
+      "id": "5b6919202873f9fe26e24752",
+      "login": "lisi",
+      "mobile": "13000000002",
+      "name": "李四",
+      "pinyinNameInitials": "ls",
+      "email": "lisi@local.dev",
+      "avatar": "avatars:svg-2",
+      "activated": true,
+      "authorities": [
+        "ROLE_USER"
+      ],
+      "createdBy": "admin",
+      "createdDate": "2018-08-07T03:59:28.788Z",
+      "lastModifiedBy": "admin",
+      "lastModifiedDate": "2018-08-07T03:59:28.788Z"
+    }
+  ],
+  "pageable": {
+    "sort": {
+      "sorted": false,
+      "unsorted": true
+    },
+    "offset": 0,
+    "pageSize": 20,
+    "pageNumber": 0,
+    "paged": true,
+    "unpaged": false
+  },
+  "facets": [],
+  "aggregations": null,
+  "scrollId": null,
+  "totalElements": 2,
+  "totalPages": 1,
+  "size": 20,
+  "number": 0,
+  "numberOfElements": 2,
+  "sort": {
+    "sorted": false,
+    "unsorted": true
+  },
+  "first": true,
+  "last": true
+}
+```
+
+当然你也可以指定字段 `name:张三 OR name:李四` ，得到的是同样的结果。
+
+### 查询语法
+
+`QueryString Query` 可以使用一套“迷你语言”， `QueryString` 被解析为一系列术语（ term ）和运算符（ operator ）。术语可以是单个单词或短语，也可以用双引号括起来，系统以相同的顺序搜索短语中的所有单词。运算符允许自定义搜索。
+
+#### 字段名称
+
+我们下面会使用一系列的例子来说明：
+
+字段 `name` 包含 `张三`
+
+```json
+name:张三
+```
+
+`name` 字段包含“张三”或“李四”，如果省略 OR 运算符，将使用默认运算符。
+
+```json
+name:(张三 OR 李四)
+name:(张三 李四)
+```
+
+`name` 字段包含完全匹配的 `张三` 这个词，使用双引号表示要完全匹配。
+
+```json
+name:"张三"
+```
+
+字段也可以使用通配符，下面的意思是以 `na` 开头的字段包含“张三”或“李四”。
+
+```json
+na*:(张三 李四)
+```
+
+字段 `name` 包含非空值
+
+```json
+_exists_:name
+```
+
+#### 通配符
+
+可以使用单个术语运行通配符搜索 `?` 替换单个字符， `*` 替换零个或多个字符：
+
+```js
+zha?g s*
+```
+
+请注意，通配符查询可能会占用大量内存并执行性能非常差，只需要想想看我们得需要查询多少个术语才能匹配查询字符串 `a * b * c *` ，就会明白为什么了。尤其是在单词的开头使用通配符（例如 `*san` ）的话，会严重影响性能，因为索引中的所有术语都需要检查是否匹配。
+
+#### 模糊匹配
+
+我们可以使用“模糊”运算符 -- `~` -- 搜索与我们的搜索字词类似但不完全相同的字词。
+
+```txt
+zhagnsan~
+```
+
+上面的表达式如果你仔细观察的话，会发现我们故意把 `zhang` 写成了 `zhagn` ，其中 `g` 和 `n` 颠倒了顺序。但在模糊匹配中这是可以匹配到的，这个功能在有时需要容忍拼写错误时尤其有用。
+
+Elasticsearch 使用 `Damerau-Levenshtein distance` <https://en.wikipedia.org/wiki/Damerau%E2%80%93Levenshtein_distance> 来查找最多包含两个更改的所有项，其中更改是单个字符的插入，删除或替换，或两个相邻字符的转置。默认编辑距离为2，但编辑距离为1应足以捕获所有人为拼写错误的 80％ 。编辑距离可以在 `~` 后跟一个数字来表示
+
+```txt
+zhagnsan~1
+```
+
+#### 范围
+
+可以为日期，数字或字符串字段指定范围。包含范围边界的使用方括号 `[min TO max]` 和不含范围边界的使用大括号 `{min TO max}` 。
+
+下面的表达式是 2018 年 8 月
+
+```json
+date:[2018-08-01 TO 2018-08-31]
+```
+
+1 - 9 的数字
+
+```json
+num:[1 TO 9]
+```
+
+大于等于 10 的数字，下面使用 `*` 表示开区间，也可以使用 `>=` 或 `<=` 表示开区间。
+
+```json
+num:[10 TO *]
+num:>=10
+```
+
+大于等于 1 小于 5 的数字，注意到大括号和中括号可以混合使用
+
+```json
+num:[1 TO 5}
+```
+
