@@ -4,7 +4,9 @@
 
 ## 实现一个简单的 HttpInterceptor
 
-我们首先来实现一个 interceptor ，当客户端发送 API 请求到服务器的时候，如果这个 API 的路径传递有误，那么后端会返回一个 `404` ，我们这个截断器的作用就是拦截到请求后，如果返回的错误码是 404 的话，就导航到前端的 404 路由。
+Angular 提供了 `HttpInterceptor` 接口，用于拦截 `HttpRequest` 并处理。 `HttpInterceptor` 提供了 `intercept()` 方法，它通常在调用下一个拦截器之前拦截传出请求。 `intercept()` 方法有两个参数 `HttpRequest` 和 `HttpHandler` 。
+
+下面我们就来实现一个 interceptor ，当客户端发送 API 请求到服务器的时候，如果这个 API 的路径传递有误，那么后端会返回一个 `404` ，我们这个截断器的作用就是拦截到请求后，如果返回的错误码是 404 的话，就导航到前端的 404 路由。
 
 ```ts
 import { Injectable, Injector } from '@angular/core';
@@ -115,4 +117,44 @@ export class CoreModule {
   }
 }
 
+```
+
+## 一个日志拦截器
+
+在开发中，如果我们可以知道 Http 请求的信息、返回的响应是成功还是失败以及执行了多长时间这些信息，那对于我们在开发中调试问题是很方便的。可能有的同学说 Chrome 的开发者工具已经可以看的这些信息啊，是的，但是这个信息是在你打开开发者工具的情况下才能看到。设想一下，你可能要求你的客户或者是测试人员都一直打开开发者工具，遇到问题再把信息发给你吗？而如果我们有一个日志可以记录下发出的请求，就可以在适当时机将日志传回服务器端进行分析了。
+
+```ts
+import { Injectable } from '@angular/core';
+import { HttpInterceptor, HttpRequest, HttpHandler, HttpResponse } from '@angular/common/http';
+import { finalize, tap } from 'rxjs/operators';
+
+@Injectable()
+export class LoggingInterceptor implements HttpInterceptor {
+  intercept(req: HttpRequest<any>, next: HttpHandler) {
+    const startTime = Date.now();
+    let status: string;
+
+    return next.handle(req).pipe(
+        tap(
+          event => {
+            status = '';
+            if (event instanceof HttpResponse) {
+              status = '成功';
+            }
+          },
+          error => status = '失败'
+        ),
+        finalize(() => {
+          const elapsedTime = Date.now() - startTime;
+          const message = req.method + " " + req.urlWithParams +" "+ status
+          + " : " + elapsedTime + "毫秒";
+
+          this.logDetails(message);
+        })
+    );
+  }
+  private logDetails(msg: string) {
+    console.log(msg);
+  }
+}
 ```
