@@ -112,7 +112,8 @@ public class AuthResourceTest {
         captcha.setUrl("http://someplace/somepic.jpg");
         captcha.setToken("someToken");
         given(this.authService.requestCaptcha()).willReturn(captcha);
-        mockMvc.perform(get("/api/auth/captcha")).andExpect(status().isOk())
+        mockMvc.perform(get("/api/auth/captcha"))
+            .andExpect(status().isOk())
             .andExpect(jsonPath("$.captcha_url").isNotEmpty())
             .andExpect(jsonPath("$.captcha_token").isNotEmpty());
     }
@@ -137,8 +138,14 @@ public class AuthResourceTest {
     public void testRegisterSuccess() throws Exception {
 
         val validateToken = "testValidateToken";
-        val user = UserVM.builder().login("test1").mobile("13000000000").email("test1@local.dev").name("test 1")
-            .password("12345").validateToken(validateToken).build();
+        val user = UserVM.builder()
+            .login("test1")
+            .mobile("13000000000")
+            .email("test1@local.dev")
+            .name("test 1")
+            .password("12345")
+            .validateToken(validateToken)
+            .build();
         val security = new AppProperties.Security();
         doNothing()
             .when(this.authService)
@@ -204,6 +211,97 @@ public void testCaptchaRequestSuccessfully() throws Exception {
 讲完了模拟对象，我们接下来看一下 `MockMVC` ， Spring 中提供的这个对象让我们可以非常快速方便的测试 `Controller` 而无需启动一个真实的 HTTP 服务器。
 
 ### 集成测试
+
+通常情况下一个单元测试只关注自己这个逻辑单元，而集成测试则需要整个系统启动起来，其实不只是系统本身需要启动，可能还涉及到系统依赖的外围系统，比如数据库、缓存服务器等等。但如果我们每次测试都得把所有系统启动起来，这测试的准备过程也过于繁琐，而且还容易出错，比如某一个依赖的系统出问题就导致测试无法运行。而且使用真实的周边系统带来的另一个问题就是测试环境的清理问题，每次在数据库中可能会产生大量测试数据，这些数据都需要清理以便进行下一轮测试。
+
+所以在自动化测试中，就像我们使用 Mock 对象一样，一般我们采用一个模拟的周边系统嵌入到待测试系统中。在我们的工程中使用了 Redis, ElasticSearch 和 MongoDB 。所以我们也引入三个嵌入式的服务： `embedded-redis` 、 `embedded-elasticsearch` 和 `de.flapdoodle.embed.mongo` ，其中嵌入式 MongoDB 没有指定版本号的原因是 Spring Boot 内建了这个依赖。
+
+```groovy
+testImplementation("com.github.kstyrc:embedded-redis:${embeddedRedisVersion}")
+testImplementation("pl.allegro.tech:embedded-elasticsearch:${embeddedElasticsearchVersion}")
+testImplementation("de.flapdoodle.embed:de.flapdoodle.embed.mongo")
+```
+
+引入依赖之后，我们还需要建立两个配置类，分别在测试启动时启动 Redis 和 ElasticSearch 服务，在测试关闭时关闭对应服务。MongoDB 的话， Spring Boot 会自动配置，所以就不需要我们手动写配置类了。
+
+```java
+package dev.local.gtm.api.config;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
+
+import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
+import java.io.IOException;
+
+@Configuration
+@Profile("test")
+public class EmbeddedRedisTestConfig {
+
+    private final redis.embedded.RedisServer redisServer;
+
+    public EmbeddedRedisTestConfig(@Value("${spring.redis.port}") final int redisPort) throws IOException {
+        this.redisServer = new redis.embedded.RedisServer(redisPort);
+    }
+
+    @PostConstruct
+    public void startRedis() {
+        this.redisServer.start();
+    }
+
+    @PreDestroy
+    public void stopRedis() {
+        this.redisServer.stop();
+    }
+}
+
+```
+
+在 Redis 配置中，我们通过 `@Value("${spring.redis.port}")` 读取配置文件 `application.yml` 中定义的 Redis 端口，然后使用 `@PostConstruct` 注解在构造函数之后启动该服务，使用 `@PreDestroy` 注解在该对象销毁之前停止服务。需要指出的是，测试配置文件，我一般会使用 `@Profile("test")` 注解规定只在测试环境下加载该配置类。
+
+类似的，对于 ElasticSearch 我们创建一个配置类，ElasticSearch 的模拟服务甚至可以设置版本号，这一点非常方便。
+
+```java
+package dev.local.gtm.api.config;
+
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
+import pl.allegro.tech.embeddedelasticsearch.EmbeddedElastic;
+import pl.allegro.tech.embeddedelasticsearch.PopularProperties;
+
+import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
+import java.io.IOException;
+
+@Configuration
+@Profile("test")
+public class EmbeddedElasticsearchTestConfig {
+    private final EmbeddedElastic embeddedElastic;
+
+    public EmbeddedElasticsearchTestConfig() throws IOException {
+        this.embeddedElastic = EmbeddedElastic.builder()
+            .withElasticVersion("5.5.0")
+            .withSetting(PopularProperties.TRANSPORT_TCP_PORT, 9300)
+            .withSetting(PopularProperties.CLUSTER_NAME, "docker-cluster")
+            .withPlugin("analysis-stempel")
+            .build();
+    }
+
+    @PostConstruct
+    public void startRedis() throws IOException, InterruptedException {
+        this.embeddedElastic.start();
+    }
+
+    @PreDestroy
+    public void stopRedis() {
+        this.embeddedElastic.stop();
+    }
+}
+
+```
+
+对于集成测试来说，我们就不需要 Mock 各种对象了，直接进行各种依赖对象的注入，并执行测试即可。需要特别指出的一点是，默认情况下，Spring Boot 中的分页对象 `Pageable` 在测试中会引发异常，需要我们在构造 MockMvc 时设置一下 `.setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())`
 
 ```java
 package dev.local.gtm.api.rest;
@@ -285,3 +383,29 @@ public class TaskResourceTest {
 }
 
 ```
+
+现在我们可以运行一下测试，既可以从 IDEA 中点击类或方法左边的图标启动测试，可以进行整个类的测试，也可以单独测试类中的某个测试方法。
+
+![IDEA 中可以启动测试](${projectRoot}/assets/2018-08-23-11-29-39.png)
+
+当然也可以使用命令行进行测试，如果我们使用持续集成或持续发布系统的话，就可以在对应的脚本中使用命令进行测试了。
+
+```bash
+./gradlew test
+```
+
+执行命令后如果，没有错误就可以看到下面这样的输出了。
+
+```txt
+> Task :gtm-api:test
+// 省略 log 输出
+BUILD SUCCESSFUL in 1m 5s
+9 actionable tasks: 9 executed
+
+```
+
+如果有测试失败的时候，在 IDEA 中，我们可以看到如下输出
+
+![测试用例返回失败](${projectRoot}/assets/2018-08-23-11-57-20.png)
+
+其中 `java.lang.AssertionError: Expected an empty value at JSON path "$.id_token" but found: 'idToken'` 这句说明失败的原因是，我们期待第一层节点 `id_token` 是空 `jsonPath("$.id_token")` ，但实际返回的是 `idToken` 这个字符串。如果我们将断言改成 `jsonPath("$.id_token").isNotEmpty()` 那么测试就会通过了。
