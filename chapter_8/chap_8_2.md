@@ -54,3 +54,93 @@ export class ProjectEffects {
 那么谁负载处理呢？谁关心谁处理，还记得我们在 Reducer 中有这两个 Action 的对应处理吗？所以 Reducer 关心就是 Reducer 来处理这两种状态。同样的，如果有其他 Effects 关心这两个状态，那它们也会处理。
 
 说到这里，大家应该理解了， Action 是一个一直存在的信号流，而 Reducer 和 Effects 都在监听，选择自己关心的在处理。区别是，接到信号后， Reducer 只改变状态，而 Effects 只关心副作用。
+
+## 不继续发射信号的 Effects
+
+是的，总有一些特殊情况，在某种情况下这个副作用之后，你不想再去做什么，也没什么好做的。下面的例子中的 `navigate$` 就是这样一个 Effect ，它监听 `routerActions.GO` 信号，然后就导航到对应路由，然后，...，就没有然后了。所以为了说明这种 Effect 不产生信号，我们需要在 `@Effect` 注解中指定其 `dispatch` 属性为 `false` 。
+
+```ts
+import { Injectable } from '@angular/core';
+import { Actions, Effect, ofType } from '@ngrx/effects';
+import { Action } from '@ngrx/store';
+import { Router } from '@angular/router';
+import { Observable } from 'rxjs';
+import { of } from 'rxjs';
+import { map, switchMap, catchError, tap } from 'rxjs/operators';
+import { AuthService } from '../services';
+import * as actions from '../actions/auth.action';
+import * as routerActions from '../actions/router.action';
+
+@Injectable()
+export class AuthEffects {
+
+  @Effect()
+  login$: Observable<Action> = this.actions$.pipe(
+    ofType<actions.LoginAction>(actions.LOGIN),
+    map((action: actions.LoginAction) => action.payload),
+    switchMap((val: { email: string; password: string }) =>
+      this.authService.login(val.email, val.password).pipe(
+        map(auth => new actions.LoginSuccessAction(auth)),
+        catchError(err =>
+          of(new actions.LoginFailAction(err))
+        )
+      )
+    )
+  );
+
+  @Effect()
+  register$: Observable<Action> = this.actions$.pipe(
+    ofType<actions.RegisterAction>(actions.REGISTER),
+    map(action => action.payload),
+    switchMap(val =>
+      this.authService.register(val).pipe(
+        map(auth => new actions.RegisterSuccessAction(auth)),
+        catchError(err => of(new actions.RegisterFailAction(err)))
+      )
+    )
+  );
+
+  @Effect()
+  navigateHome$: Observable<Action> = this.actions$.pipe(
+    ofType<actions.LoginSuccessAction>(actions.LOGIN_SUCCESS),
+    map(() => new routerActions.Go({ path: ['/projects'] }))
+  );
+
+  @Effect()
+  registerAndHome$: Observable<Action> = this.actions$.pipe(
+    ofType<actions.RegisterSuccessAction>(actions.REGISTER_SUCCESS),
+    map(() => new routerActions.Go({ path: ['/projects'] }))
+  );
+
+  @Effect()
+  logout$: Observable<Action> = this.actions$.pipe(
+    ofType<actions.LogoutAction>(actions.LOGOUT),
+    map(() => new routerActions.Go({ path: ['/'] }))
+  );
+
+  @Effect({ dispatch: false })
+  navigate$ = this.actions$.pipe(
+    ofType(routerActions.GO),
+    map((action: routerActions.Go) => action.payload),
+    tap(({ path, query: queryParams, extras }) =>
+      this.router.navigate(path, { queryParams, ...extras })
+    )
+  );
+
+  /**
+   *
+   * @param actions$
+   * @param authService
+   */
+  constructor(
+    private actions$: Actions,
+    private router: Router,
+    private authService: AuthService
+  ) {}
+}
+
+```
+
+上面的代码中除了有不继续发射的 Effect 之外，还有一些有趣的技巧，我们在 `LoginSuccessAction` 和 `RegisterSuccessAction` 信号发出后，使用 `navigateHome$` 和 `registerAndHome$` 分别监听这两个信号，并且发出 `routerActions.Go` 的信号，然后由 `navigate$` 监听这个信号，使用 Angular Router 导航到对应的路由。
+
+这个链路充分说明使用好一个信号流的话，我们可以非常清晰的将程序逻辑既做到松耦合，又做到了以信号为驱动的业务逻辑触发。而且这样做之后，页面组件就只需和 `store` 打交道，不用依赖其他服务，比如路由服务。
