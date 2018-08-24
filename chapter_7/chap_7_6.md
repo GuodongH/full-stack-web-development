@@ -206,6 +206,42 @@ public void testCaptchaRequestSuccessfully() throws Exception {
 }
 ```
 
+细心的同学此时会发现一个问题，如果方法有返回值的话，使用上面的 `given(...).willReturn(...)` 这种方法去模拟当然没有问题，但没有返回值的怎么办？这种情况下我们可以使用 `doNothing().when(someService).someVoidMethod()` 这种模拟方式：就是说在 `someService` 的 `someVoidMethod()` 被调用时什么都不做。下面的代码就很好的体现了这个范式：
+
+```java
+@Test
+public void testRegisterSuccess() throws Exception {
+
+    val validateToken = "testValidateToken";
+    val user = UserVM.builder()
+        .login("test1")
+        .mobile("13000000000")
+        .email("test1@local.dev")
+        .name("test 1")
+        .password("12345")
+        .validateToken(validateToken)
+        .build();
+    val security = new AppProperties.Security();
+    doNothing()
+        .when(this.authService)
+        .verifyCaptchaToken(validateToken);
+    doNothing()
+        .when(this.authService)
+        .registerUser(user.toUserDTO(), "12345");
+    given(this.authService.login(user.getLogin(), user.getPassword()))
+        .willReturn(new JWTToken("idToken", "refreshToken"));
+    given(this.appProperties.getSecurity())
+        .willReturn(security);
+
+    mockMvc.perform(post("/api/auth/register")
+        .contentType(MediaType.APPLICATION_JSON_UTF8)
+        .content(objectMapper.writeValueAsString(user)))
+        .andDo(print())
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id_token").isNotEmpty());
+}
+```
+
 接下来的事情就比较有趣了，上面代码中，我们使用了一个类似自然语言的表达 `given(this.authService.requestCaptcha()).willReturn(captcha)` 。这个表达的意思就是如果遇到 `this.authService.requestCaptcha()` 方法调用时，请返回 `captcha` 这个对象。这样就摆脱了对于真实 `AuthService` 的依赖，如果我负责 Rest API ，而你负责服务层，在你真正的服务开发好之前，我已经可以测试了。
 
 讲完了模拟对象，我们接下来看一下 `MockMVC` ， Spring 中提供的这个对象让我们可以非常快速方便的测试 `Controller` 而无需启动一个真实的 HTTP 服务器。
@@ -386,7 +422,7 @@ public class TaskResourceTest {
 
 现在我们可以运行一下测试，既可以从 IDEA 中点击类或方法左边的图标启动测试，可以进行整个类的测试，也可以单独测试类中的某个测试方法。
 
-![IDEA 中可以启动测试](${projectRoot}/assets/2018-08-23-11-29-39.png)
+![IDEA 中可以启动测试](/assets/2018-08-23-11-29-39.png)
 
 当然也可以使用命令行进行测试，如果我们使用持续集成或持续发布系统的话，就可以在对应的脚本中使用命令进行测试了。
 
@@ -406,6 +442,6 @@ BUILD SUCCESSFUL in 1m 5s
 
 如果有测试失败的时候，在 IDEA 中，我们可以看到如下输出
 
-![测试用例返回失败](${projectRoot}/assets/2018-08-23-11-57-20.png)
+![测试用例返回失败](/assets/2018-08-23-11-57-20.png)
 
 其中 `java.lang.AssertionError: Expected an empty value at JSON path "$.id_token" but found: 'idToken'` 这句说明失败的原因是，我们期待第一层节点 `id_token` 是空 `jsonPath("$.id_token")` ，但实际返回的是 `idToken` 这个字符串。如果我们将断言改成 `jsonPath("$.id_token").isNotEmpty()` 那么测试就会通过了。

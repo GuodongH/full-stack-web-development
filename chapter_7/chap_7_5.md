@@ -235,7 +235,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.SimpMessageType;
 import org.springframework.security.config.annotation.web.messaging.MessageSecurityMetadataSourceRegistry;
-import org.springframework.security.config.annotation.web.socket.AbstractSecurityWebSocketMessageBrokerConfigurer;![](${projectRoot}/assets/2018-08-23-13-00-47.png)
+import org.springframework.security.config.annotation.web.socket.AbstractSecurityWebSocketMessageBrokerConfigurer;
 
 @RequiredArgsConstructor
 @Configuration
@@ -302,11 +302,11 @@ public class EchoController {
 
 为了测试 WebSocket ，我们需要有一个可以支持 STOMP 的客户端，这里我们采用一个 Chrome 扩展插件叫做 Websocket STOMP Client ，这个插件需要科学上网到 Chrome 商店去下载。安装好插件后，我们就可以在 `URL` 中填 <ws://localhost:8080/websocket/tracker> ，然后在 `Connection Headers` 中填写一个鉴权头，和之前讲过的 Web 鉴权方式一样，是一个 `Authorization: Bearer <token>` 这样的格式。此时我们点击 `Connect` 就会发现 Status 变成了 `CONNECTED` ，表示连接成功了。
 
-![使用 Stomp Client 测试连接](${projectRoot}/assets/2018-08-23-13-00-59.png)
+![使用 Stomp Client 测试连接](/assets/2018-08-23-13-00-59.png)
 
 连接上之后，我们在 `Subscribe` 文本框中输入 `/topic/echo` 以订阅这个主题。然后在 `Send to topic` 的 `Topic` 中填写 `/app/echo` （还记得我们定义的前缀 `/app` 吗？），在 `Message` 中填写 `hello`
 
-![订阅主题和向主题发送消息](${projectRoot}/assets/2018-08-23-20-51-05.png)
+![订阅主题和向主题发送消息](/assets/2018-08-23-20-51-05.png)
 
 我们可以从下面的文本中看到连接、订阅、发送、接收消息的全过程。
 
