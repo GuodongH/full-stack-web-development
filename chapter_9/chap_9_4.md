@@ -281,4 +281,4 @@ api-service:
     ServerListRefreshInterval: 15000
 ```
 
-但如果我们使用了 Eureka 的话，我们就无需任何配置，当然 Eureka 的配置还是需要的。Spring Cloud 集成了 Ribbon 和 Eureka ，可在使用 Feign 时提供负载均衡的 HTTP 客户端。此时默认的无需指定 `listOfServers` ，因为 Feign 会自动从 Eureka 拉取 Server 列表，并利用集成的 Ribbon 进行负载均衡。
+但如果我们使用了 Eureka 的话，我们就无需任何 Ribbon 配置，当然 Eureka 的配置还是需要的。Spring Cloud 集成了 Ribbon 和 Eureka ，可在使用 Feign 时提供负载均衡的 HTTP 客户端。此时默认的无需指定 `listOfServers` ，因为 Feign 会自动从 Eureka 拉取 Server 列表，并利用集成的 Ribbon 进行负载均衡。

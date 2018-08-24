@@ -116,7 +116,7 @@ success Saved lockfile.
 
 我们的工程最后会如下图的组织形式一样
 
-![](/assets/chap_1_3_client_structure.png)
+![客户端工程](/assets/chap_1_3_client_structure.png)
 
 但在一开始，我们先建立两个模块，一个叫核心模块 \(CoreModule\) ，另一个叫共享模块 \(SharedModule\)。核心模块的作用是初始化应用以及加载必要需要**单例**的功能，最常见的情况是，我们通常把 Http 的服务放到核心模块中，因为通常情况下，我们希望服务只被创建一次。
 
@@ -264,7 +264,7 @@ Angular 中的依赖性注入框架主要包含下面几个角色：
 * Provider（提供者）：Provider 告诉 Injector \*\*怎样\*\* 创建实例（比如我们上面提到的是通过某个构造函数还是工厂类创建等等）。Provider 接受一个令牌，然后把令牌映射到一个用于构建目标对象的工厂函数。
 * Dependency（依赖）：依赖是一种 \*\*类型\*\* ，这个类型就是我们要创建的对象的类型。
 
-![](/assets/chap_2_1_001.png)'
+![Angular 中的依赖注入](/assets/chap_2_1_001.png)
 
 可能看到这里还是有些云里雾里，没关系，我们还是用例子来说明：
 

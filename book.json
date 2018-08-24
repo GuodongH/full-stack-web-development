@@ -6,17 +6,18 @@
   "gitbook": ">=3.2.3",
   "root": ".",
   "plugins": [
-    "toc@0.0.2",
-    "search-plus@^0.0.11",
-    "github@^2.0.0",
-    "katex@^1.1.4",
-    "mermaid-gb3@2.1.0",
-    "puml@^1.0.1",
-    "graph@^0.1.0",
-    "donate@^1.0.2",
-    "terminal@^0.3.2",
+    "toc",
+    "search-plus",
+    "github",
+    "katex",
+    "mermaid-gb3",
+    "puml",
+    "graph",
+    "donate",
+    "terminal",
     "-sharing",
-    "sharing-plus"
+    "sharing-plus",
+    "image-captions"
   ],
   "pluginsConfig": {
     "toc": {
@@ -69,6 +70,9 @@
         "qq",
         "qzone"
       ]
+    },
+    "image-captions": {
+      "caption": "_CAPTION_"
     }
   }
 }
