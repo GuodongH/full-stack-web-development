@@ -44,7 +44,7 @@ Sec-WebSocket-Protocol: v10.stomp
 
 ## HTTP 和 WebSocket 的区别和联系
 
-我们在考虑使用 WebSocket 的时候要注意，通常的 Rest API 模型和 WebSocket 模型的区别是巨大的，无论对服务端还是客户端来说，架构和编程模式上的改变都是如此。在 Rest API 模型中，我们把资源划分成若干 URL ，客户端需要使用 Request/Response 的机制去访问这些 URL ，服务端也会根据这些 Request 的 URL 、方法和请求头来决定对应的处理方式。
+我们在考虑使用 WebSocket 的时候要注意，通常的 Rest API 编程模型和 WebSocket 编程模型的区别是巨大的，这一点无论对服务端还是客户端来说都是如此。在 Rest API 模型中，我们把资源划分成若干 URL ，客户端需要使用 Request/Response 的机制去访问这些 URL ，服务端也会根据这些 Request 的 URL 、方法和请求头来决定对应的处理方式。
 
 而对于 WebSocket 来说，通常是建立一个连接后就通过这个连接发送后继的消息，这个是一个一直保持连接的模型，而不是像 REST 方式那样每次建立新的连接。一般来说，这种模式要求的编程模型是事件驱动类型的，和 Request/Response 的模型区别较大。
 

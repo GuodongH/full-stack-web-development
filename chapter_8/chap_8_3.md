@@ -296,3 +296,61 @@ module.exports = {
 现在我们使用 `npm run start:server` 就可以了。此时打开浏览器查看源文件的话，我们会看的 `<app-root>` 中是有完整的 HTML 的，而在没有使用服务端渲染的时候，这个里面是没有内容的。
 
 ![](/assets/2018-08-24-16-53-04.png)
+
+## 服务端渲染中出现重复请求的处理
+
+在服务端渲染后，很多同学会发现较为奇怪的现象，有的时候 Http 请求会发送两次，服务端一次，客户端一次。
+
+发生这种现象的原因是，服务端渲染页面时，会先将 Http 请求的内容得到，然后将得到的内容填进页面中，发送给客户端。但客户端并不知道内容已经渲染好了，于是就又发送了一次。
+
+那么解决这个问题在 Angular 6 中已经有非常简单的方案，那就是在 AppModule 中导入 `TransferHttpCacheModule` 。
+
+```ts
+import { BrowserModule } from '@angular/platform-browser';
+import { TransferHttpCacheModule } from '@nguniversal/common';
+import { NgModule } from '@angular/core';
+import { CoreModule } from './core';
+import { SharedModule } from './shared';
+import { LoginModule } from './login';
+import { AppComponent } from './core/containers/app';
+
+@NgModule({
+  imports: [
+    BrowserModule.withServerTransition({ appId: 'taskmgr' }),
+    TransferHttpCacheModule,
+    SharedModule,
+    LoginModule,
+    CoreModule
+  ],
+  bootstrap: [AppComponent]
+})
+export class AppModule {}
+
+```
+
+而在 `AppServerModule` 中导入 `ServerTransferStateModule`
+
+```ts
+import { NgModule } from '@angular/core';
+import {
+  ServerModule,
+  ServerTransferStateModule
+} from '@angular/platform-server';
+import { ModuleMapLoaderModule } from '@nguniversal/module-map-ngfactory-loader';
+import { AppModule } from './app.module';
+import { AppComponent } from './core/containers/app';
+
+@NgModule({
+  imports: [
+    AppModule,
+    ServerModule,
+    ServerTransferStateModule,
+    ModuleMapLoaderModule // <-- *Important* to have lazy-loaded routes work
+  ],
+  bootstrap: [AppComponent]
+})
+export class AppServerModule {}
+
+```
+
+这样就 OK 了？是的就这么简单。那么再说两句这个背后机理，解决方案其实是对于每个请求都标记上一个 key ，然后，通过 `TransferHttpCacheModule` 提供的 interceptor 进行请求的拦截，如果发现服务端已经处理过这个请求就直接返回结果。

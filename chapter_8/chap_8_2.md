@@ -42,3 +42,15 @@ export class ProjectEffects {
 ```
 
 首先在 Effects 中的构造函数中注入 Actions ，这个 Actions 就是一个 Action 的事件流，是一个 Obseravble 。
+
+它会监听应用发射出来的所有 Action , `ngrx` 提供了一个操作符 `ofType` ，这个操作符起到的作用就是过滤。比如上面的代码中 `this.actions$.ofType<fromProject.Actions>(fromUser.ActionTypes.LoadUsers)` 就意味着我们只关心 `LoadUsers` 也就是项目中的加载用户列表的 Action 。
+
+既然是一个 Observable ，我们后面就采用了 `switchMap` 表示收到这个 Action 信号后要执行另一个流的操作。要后续操作的这个流就是调用服务层中的加载用户的方法 `getAll()` ，这个方法中调用了 HttpClient 访问后端定义的 API ，可能的结果有两种情况：成功或者失败。
+
+请求成功的时候，我们发射 `LoadProjectsSuccess` 这个 Action ，而失败的时候，我们利用 `catchError` 捕获到异常，然后发射 `LoadProjectsFailure` 这个 Action 。
+
+发射这两个 Action 的意义在哪里呢？因为这个 Effect 只负责发送加载用户列表这个 Http 请求，而这个处理已经结束了，其他的事情不是这个 Effect 要处理的，所以我们把对应的信号发射出去。
+
+那么谁负载处理呢？谁关心谁处理，还记得我们在 Reducer 中有这两个 Action 的对应处理吗？所以 Reducer 关心就是 Reducer 来处理这两种状态。同样的，如果有其他 Effects 关心这两个状态，那它们也会处理。
+
+说到这里，大家应该理解了， Action 是一个一直存在的信号流，而 Reducer 和 Effects 都在监听，选择自己关心的在处理。区别是，接到信号后， Reducer 只改变状态，而 Effects 只关心副作用。
