@@ -303,42 +303,56 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class AuditEventService {
 
-  private static final String basePackageName = "dev.local.gtm.api.domain.";
-  private final Javers javers;
+    private static final String basePackageName = Constants.BASE_PACKAGE_NAME + ".domain.";
+    private final Javers javers;
 
-  @Secured(AuthoritiesConstants.ADMIN)
-  public Page<EntityAuditEvent> getChanges(String entityType, Pageable pageable) throws ClassNotFoundException {
-    log.debug("获得一页指定实体对象类型的审计事件");
-    val entityTypeToFetch = Class.forName(basePackageName + entityType);
-    val jqlQuery = QueryBuilder.byClass(entityTypeToFetch)
-      .limit(pageable.getPageSize())
-      .skip(pageable.getPageNumber() * pageable.getPageSize())
-      .withNewObjectChanges(true);
+    public Optional<String> getChangesByClassName(String className, Long commitVersion) {
+        try {
+            val clazz = Class.forName(basePackageName + className);
+            val jqlQuery = QueryBuilder.byClass(clazz).withVersion(commitVersion - 1);
+            val changes = javers.findChanges(jqlQuery.build());
+            return Optional.of(javers.getJsonConverter().toJson(changes));
+        } catch (Exception e) {
+            return Optional.empty();
+        }
+    }
 
-    val auditEvents = javers.findSnapshots(jqlQuery.build()).stream()
-      .map(snapshot -> {
-        EntityAuditEvent event = EntityAuditEvent.fromJaversSnapshot(snapshot);
-        event.setEntityType(entityType);
-        return event;
-      })
-      .collect(Collectors.toList());
+    public Page<EntityAuditEvent> getSnapshots(String entityType, LocalDate from, LocalDate to, Pageable pageable) throws ClassNotFoundException {
+        log.debug("获得一页指定实体对象类型的审计事件");
+        val entityTypeToFetch = Class.forName(basePackageName + entityType);
+        val jqlQuery = QueryBuilder.byClass(entityTypeToFetch)
+            .limit(pageable.getPageSize())
+            .skip(pageable.getPageNumber() * pageable.getPageSize())
+            .withNewObjectChanges(true);
+        if (from != null) {
+            jqlQuery.from(from);
+        }
+        if (to != null) {
+            jqlQuery.to(to);
+        }
 
-    return new PageImpl<EntityAuditEvent>(auditEvents);
-  }
+        val auditEvents = javers.findSnapshots(jqlQuery.build()).stream()
+            .map(snapshot -> {
+                EntityAuditEvent event = EntityAuditEvent.fromJaversSnapshot(snapshot);
+                event.setEntityType(entityType);
+                return event;
+            })
+            .collect(Collectors.toList());
 
-  @Secured(AuthoritiesConstants.ADMIN)
-  public EntityAuditEvent getPrevVersion(String entityType, String entityId, Long commitVersion)
-      throws ClassNotFoundException {
-    val entityTypeToFetch = Class.forName(basePackageName + entityType);
+        return new PageImpl<>(auditEvents);
+    }
 
-    val jqlQuery = QueryBuilder.byInstanceId(entityId, entityTypeToFetch)
-      .limit(1)
-      .withVersion(commitVersion - 1)
-      .withNewObjectChanges(true);
+    public EntityAuditEvent getPrevVersion(String entityType, String entityId, Long commitVersion)
+        throws ClassNotFoundException {
+        val entityTypeToFetch = Class.forName(basePackageName + entityType);
 
-    return EntityAuditEvent.fromJaversSnapshot(javers.findSnapshots(jqlQuery.build())
-      .get(0));
-  }
+        val jqlQuery = QueryBuilder.byInstanceId(entityId, entityTypeToFetch)
+            .limit(1)
+            .withVersion(commitVersion - 1)
+            .withNewObjectChanges(true);
+
+        return EntityAuditEvent.fromJaversSnapshot(javers.findSnapshots(jqlQuery.build()).get(0));
+    }
 }
 ```
 
@@ -397,4 +411,53 @@ public class AuditResource {
 }
 ```
 
-那么我们可以测试一下效果
+现在如果我们新建两个用户，然后使用 Swagger 文档界面测试一下，可以得到类似下面的结果。客户端可以利用这样的结果做出更可视化的历史审计界面。
+
+```json
+{
+  "content": [
+    {
+      "id": "3.0",
+      "entityId": "5b8140c924a2d075547230a8",
+      "entityType": "User",
+      "action": "CREATE",
+      "entityValue": "{\"resetDate\": \"2018-08-25T11:43:05.577Z\",\"lastModifiedDate\": \"2018-08-25T11:43:05.585Z\",\"lastModifiedBy\": \"admin\",\"mobile\": \"13000000002\",\"avatar\": \"avatars:svg-2\",\"login\": \"lisi\",\"authorities\": \"[...Authority/5b813d8524a2d0755472309d]\",\"password\": \"$2a$10$fWnojM8Xj81/G6WbAa0BwetvS0ZrPacbWhpvjywWQ72.6.OHRG5ny\",\"createdDate\": \"2018-08-25T11:43:05.585Z\",\"pinyinNameInitials\": \"ls\",\"createdBy\": \"admin\",\"name\": \"李四\",\"id\": \"5b8140c924a2d075547230a8\",\"email\": \"lisi@local.dev\",\"activated\": \"true\"}",
+      "commitVersion": 1,
+      "modifiedBy": "admin",
+      "modifiedDate": "2018-08-25T19:43:05.591Z"
+    },
+    {
+      "id": "2.0",
+      "entityId": "5b81409524a2d075547230a6",
+      "entityType": "User",
+      "action": "CREATE",
+      "entityValue": "{\"resetDate\": \"2018-08-25T11:42:13.515Z\",\"lastModifiedDate\": \"2018-08-25T11:42:13.525Z\",\"lastModifiedBy\": \"admin\",\"mobile\": \"13000000001\",\"avatar\": \"avatars:svg-1\",\"login\": \"zhangsan\",\"authorities\": \"[...Authority/5b813d8524a2d0755472309d]\",\"password\": \"$2a$10$B0cL9.GNwYdxo9qAFGUzF.pJuVWtyNtsomw6AuPjdWXIN6ADLtF3q\",\"createdDate\": \"2018-08-25T11:42:13.525Z\",\"pinyinNameInitials\": \"zs\",\"createdBy\": \"admin\",\"name\": \"张三\",\"id\": \"5b81409524a2d075547230a6\",\"email\": \"zhangsan@local.dev\",\"activated\": \"true\"}",
+      "commitVersion": 1,
+      "modifiedBy": "admin",
+      "modifiedDate": "2018-08-25T19:42:13.538Z"
+    },
+    {
+      "id": "1.0",
+      "entityId": "5b813d8524a2d075547230a0",
+      "entityType": "User",
+      "action": "CREATE",
+      "entityValue": "{\"lastModifiedDate\": \"2018-08-25T11:29:09.376Z\",\"lastModifiedBy\": \"system\",\"mobile\": \"13999999999\",\"avatar\": \"avatar-0\",\"login\": \"admin\",\"authorities\": \"[...Authority/5b813d8524a2d0755472309e, ...Authority/5b813d8524a2d0755472309d]\",\"password\": \"$2a$10$NitMS5jTz6lA.C/HHvzPPu30xdqqYh0mvtDzTWiupQzjO7ko0U6pK\",\"createdDate\": \"2018-08-25T11:29:09.376Z\",\"pinyinNameInitials\": \"cjgly\",\"createdBy\": \"system\",\"name\": \"超级管理员\",\"id\": \"5b813d8524a2d075547230a0\",\"email\": \"admin@local.dev\",\"activated\": \"true\"}",
+      "commitVersion": 1,
+      "modifiedBy": "system",
+      "modifiedDate": "2018-08-25T19:29:09.452Z"
+    }
+  ],
+  "pageable": "INSTANCE",
+  "totalElements": 3,
+  "last": true,
+  "totalPages": 1,
+  "size": 0,
+  "number": 0,
+  "numberOfElements": 3,
+  "first": true,
+  "sort": {
+    "sorted": false,
+    "unsorted": true
+  }
+}
+```

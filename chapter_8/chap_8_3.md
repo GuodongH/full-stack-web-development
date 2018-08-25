@@ -76,7 +76,7 @@ projects[1]
 }
 ```
 
-这种类型我们可以定义成下面的样子
+这个 id 构成的数组在实际开发中起到的作用是索引，如果需要数组形式的实体，那么使用 `ids.map(id => entities[id])` 即可。那么这种由 id 构成数组，由字典构成实体集合的类型我们可以定义成下面的样子
 
 ```ts
 export interface ProjectState {
@@ -96,7 +96,7 @@ export interface State {
 }
 ```
 
-在这样的结构下面，大部分实体的 reducer 是非常类似的，大致看起来是下面的样子，只是实体不同而已：
+在这样的结构下面，而且大部分实体的 reducer 是非常类似的，大致看起来是下面的样子，只是实体不同而已：
 
 ```ts
 const initialProjectState: ProjectState = {
@@ -125,4 +125,90 @@ export function reducer(
 }
 ```
 
-这就引出了我们开头说的，在大项目中写这种重复度较高的代码是很烦的，所以 `@ngrx/entity` 就来解救我们了
+而且不只是 reducer ，其实在 Selectors 中的代码重复度也很高，比如
+
+```ts
+// 得到索引数组
+export const ids = (state) => state.ids;
+// 得到实体字典
+export const entities = (state) => state.entities;
+// 得到实体数量
+export const total = (state) => state.ids.length;
+// 得到数组形态的实体
+export const allProjects = (state) => state.ids.map(id => entity[id]);
+```
+
+这就引出了我们开头说的，在大项目中写这种重复度较高的代码是很烦的，所以 `@ngrx/entity` 就来解救我们了。要使用 `@ngrx/entity` 提供的便利，实体必须有 id 字段，数字或字符串都行，只要满足这一点，我们就可以像下面代码一样定义状态，看到了吗？ `ids` 和 `entities` 哪去了？它们定义在 `EntityState` 中，所以你只需要定义这两个之外的属性，比如 `selectedId` ：
+
+```ts
+export interface State extends EntityState<Project> {
+  selectedId: string | null;
+}
+```
+
+为了能够使用 `ngrx/entity` 的其他功能，我们需要首先创建一个 `EntityAdapter` 。它提供了一系列实用程序函数，使操作实体状态变得非常简单。 `EntityAdapter` 允许我们以更简单的方式编写所有初始实体状态， reducers 和选择器。
+
+在构建 `EntityAdapter` 时，我们还需要提供一个排序函数，这个用于集合中实体的排序，下面的代码中给出一个依照项目名称排序的函数。
+
+```ts
+export function sortByName(a: Project, b: Project): number {
+  return a.name.localeCompare(b.name);
+}
+
+export const adapter: EntityAdapter<Project> = createEntityAdapter<Project>({
+  selectId: (project: Project) => <string>project.id,
+  sortComparer: sortByName,
+});
+```
+
+有了这样一个 `adapter` 之后，对于状态的增、删、改、查就比较方便了，依据不同的情况可以使用 `adatper` 提供的 `addOne` 、 `removeOne` 、 `updateOne` 、 `addMany` 、 `removeMany` 、 `updateMany` 、 `addAll` 、 `removeAll` 。这些方法的作用从名字上一看就知道了，所以就不展开说了，可以参考下面的代码中的用法。
+
+```ts
+import { Project } from '../domain';
+import { createSelector } from '@ngrx/store';
+import { EntityState, EntityAdapter, createEntityAdapter } from '@ngrx/entity';
+import * as actions from '../actions/project.action';
+
+export interface State extends EntityState<Project> {
+  selectedId: string | null;
+}
+
+export function sortByName(a: Project, b: Project): number {
+  return a.name.localeCompare(b.name);
+}
+
+export const adapter: EntityAdapter<Project> = createEntityAdapter<Project>({
+  selectId: (project: Project) => <string>project.id,
+  sortComparer: sortByName,
+});
+
+export const initialState: State = adapter.getInitialState({
+  // additional entity state properties
+  selectedId: null
+});
+
+export function reducer(state = initialState, action: actions.Actions): State {
+  switch (action.type) {
+    case actions.ADD_SUCCESS:
+      return { ...adapter.addOne(action.payload, state), selectedId: null };
+    case actions.DELETE_SUCCESS:
+      return { ...adapter.removeOne(<string>action.payload.id, state), selectedId: null };
+    case actions.INVITE_SUCCESS:
+    case actions.UPDATE_LISTS_SUCCESS:
+    case actions.UPDATE_SUCCESS:
+    case actions.INSERT_FILTER_SUCCESS:
+      return { ...adapter.updateOne({ id: <string>action.payload.id, changes: action.payload }, state), selectedId: null };
+    case actions.LOADS_SUCCESS:
+      return { ...adapter.addMany(action.payload, state), selectedId: null };
+    case actions.SELECT:
+      return { ...state, selectedId: <string>action.payload.id };
+    default:
+      return state;
+  }
+}
+
+export const getSelectedId = (state: State) => state.selectedId;
+
+```
+
+结合 `@ngrx/schematics` 和 `@ngrx/entity` 我们就可以简化大部分的重复性工作了，大家可以在工作中体会一下。
