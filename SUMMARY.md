@@ -50,4 +50,3 @@
   * [9.3 监控服务和路由服务](chapter_9/chap_9_3.md)
   * [9.4 微服务的远程调用](chapter_9/chap_9_4.md)
 * [附录一：常见的云服务虚拟机问题和解决方案](appendix/appendix_0.md)
-* [附录二：书中使用的第三方云服务简要说明](appendix/appendix_1.md)
