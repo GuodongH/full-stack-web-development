@@ -128,7 +128,7 @@ ZSH_THEME="spaceship"
 
 ![Fira Code 字体效果](/assets/2018-03-02-21-34-10.png)
 
-如果有兴趣的同学可以去 ![https://github.com/tonsky/FiraCode](https://github.com/tonsky/FiraCode) 下载
+如果有兴趣的同学可以去 <https://github.com/tonsky/FiraCode> 下载
 
 如果需要在 VS Code 中设置使用该字体的话，需要到 `首选项` -> `设置` 中添加如下配置
 
